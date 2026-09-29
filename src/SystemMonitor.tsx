@@ -1,10 +1,16 @@
 import { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Cpu, HardDrive, Zap, Activity, AlertTriangle } from "lucide-react";
+import { Language, translations } from "./i18n";
 
-export function SystemMonitor() {
+interface SystemMonitorProps {
+  language?: Language;
+}
+
+export function SystemMonitor({ language = "es" }: SystemMonitorProps) {
   const [statusData, setStatusData] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
+  const t = translations[language] || translations.es;
   
   // Use a ref to ensure interval keeps going correctly
   const mounted = useRef(true);
@@ -40,7 +46,7 @@ export function SystemMonitor() {
       <div className="flex-1 flex items-center justify-center">
         <div className="text-red-400 text-center">
           <AlertTriangle size={48} className="mx-auto mb-4 opacity-50" />
-          <p>Error obteniendo estado del sistema: {error}</p>
+          <p>{t.sysError}: {error}</p>
         </div>
       </div>
     );
@@ -50,7 +56,7 @@ export function SystemMonitor() {
     return (
       <div className="flex-1 flex flex-col items-center justify-center text-white/50">
         <Activity size={48} className="animate-pulse mb-4" />
-        <p>Conectando con sensores del sistema...</p>
+        <p>{t.sysConnecting}</p>
       </div>
     );
   }
@@ -68,7 +74,7 @@ export function SystemMonitor() {
         <div className="bg-black/40 border border-white/10 rounded-2xl p-6 flex flex-col shadow-xl">
           <div className="flex items-center gap-3 mb-4 text-blue-400">
             <Cpu size={24} />
-            <h2 className="text-lg font-bold text-white">CPU</h2>
+            <h2 className="text-lg font-bold text-white">{t.sysCpu}</h2>
           </div>
           <div className="text-4xl font-light mb-2">{cpu.usage.toFixed(1)}<span className="text-lg text-white/50">%</span></div>
           <div className="w-full bg-white/10 rounded-full h-2 mb-4 overflow-hidden">
@@ -76,7 +82,7 @@ export function SystemMonitor() {
           </div>
           <div className="text-xs text-white/50 flex justify-between mt-auto">
             <span>{hardware.cpu_model}</span>
-            <span>{cpu.core_count} Núcleos</span>
+            <span>{cpu.core_count} {t.sysCores}</span>
           </div>
         </div>
 
@@ -84,15 +90,15 @@ export function SystemMonitor() {
         <div className="bg-black/40 border border-white/10 rounded-2xl p-6 flex flex-col shadow-xl">
           <div className="flex items-center gap-3 mb-4 text-purple-400">
             <Zap size={24} />
-            <h2 className="text-lg font-bold text-white">Memoria RAM</h2>
+            <h2 className="text-lg font-bold text-white">{t.sysRam}</h2>
           </div>
           <div className="text-4xl font-light mb-2">{memory.used_percent.toFixed(1)}<span className="text-lg text-white/50">%</span></div>
           <div className="w-full bg-white/10 rounded-full h-2 mb-4 overflow-hidden">
             <div className="bg-purple-500 h-2 rounded-full transition-all duration-1000 ease-in-out" style={{ width: `${memory.used_percent}%` }}></div>
           </div>
           <div className="text-xs text-white/50 flex justify-between mt-auto">
-            <span>{(memory.used / (1024**3)).toFixed(1)} GB Usados</span>
-            <span>{hardware.total_ram} Total</span>
+            <span>{(memory.used / (1024**3)).toFixed(1)} GB {t.sysUsed}</span>
+            <span>{hardware.total_ram} {t.sysTotal}</span>
           </div>
         </div>
 
@@ -100,15 +106,15 @@ export function SystemMonitor() {
         <div className="bg-black/40 border border-white/10 rounded-2xl p-6 flex flex-col shadow-xl">
           <div className="flex items-center gap-3 mb-4 text-emerald-400">
             <HardDrive size={24} />
-            <h2 className="text-lg font-bold text-white">Disco ({mainDisk?.mount || '/'})</h2>
+            <h2 className="text-lg font-bold text-white">{t.sysDisk} ({mainDisk?.mount || '/'})</h2>
           </div>
           <div className="text-4xl font-light mb-2">{mainDisk?.used_percent?.toFixed(1) || 0}<span className="text-lg text-white/50">%</span></div>
           <div className="w-full bg-white/10 rounded-full h-2 mb-4 overflow-hidden">
             <div className="bg-emerald-500 h-2 rounded-full transition-all duration-1000 ease-in-out" style={{ width: `${mainDisk?.used_percent || 0}%` }}></div>
           </div>
           <div className="text-xs text-white/50 flex justify-between mt-auto">
-            <span>{((mainDisk?.used || 0) / (1024**3)).toFixed(1)} GB Usados</span>
-            <span>{hardware.disk_size} Total</span>
+            <span>{((mainDisk?.used || 0) / (1024**3)).toFixed(1)} GB {t.sysUsed}</span>
+            <span>{hardware.disk_size} {t.sysTotal}</span>
           </div>
         </div>
       </div>
@@ -117,17 +123,17 @@ export function SystemMonitor() {
       <div className="bg-black/40 border border-white/10 rounded-2xl p-6 flex flex-col shadow-xl flex-1 min-h-[250px]">
         <div className="flex items-center gap-3 mb-6 text-white/80">
           <Activity size={20} />
-          <h2 className="text-lg font-bold">Procesos de Mayor Consumo</h2>
+          <h2 className="text-lg font-bold">{t.sysTopProcesses}</h2>
         </div>
         
         <div className="flex-1 overflow-auto pr-2">
           <table className="w-full text-sm text-left">
             <thead className="text-xs text-white/40 uppercase sticky top-0 bg-[#161616] pb-2 border-b border-white/10">
               <tr>
-                <th className="px-4 py-3 font-medium">Proceso</th>
-                <th className="px-4 py-3 font-medium text-right w-24">PID</th>
-                <th className="px-4 py-3 font-medium text-right w-24">CPU %</th>
-                <th className="px-4 py-3 font-medium text-right w-24">RAM %</th>
+                <th className="px-4 py-3 font-medium">{t.sysThProcess}</th>
+                <th className="px-4 py-3 font-medium text-right w-24">{t.sysThPid}</th>
+                <th className="px-4 py-3 font-medium text-right w-24">{t.sysThCpu}</th>
+                <th className="px-4 py-3 font-medium text-right w-24">{t.sysThRam}</th>
               </tr>
             </thead>
             <tbody>

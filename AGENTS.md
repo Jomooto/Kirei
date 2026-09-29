@@ -14,7 +14,7 @@
 - **Otras herramientas:** pnpm / npm
 
 ## 3. Reglas y Convenciones (Strict)
-- **Lenguaje:** Código en inglés, comentarios en español, y la UI 100% en español.
+- **Lenguaje:** Código en inglés, comentarios en español, y la UI bilingüe con detección automática del sistema (Español y English US) intercambiable mediante selector dinámico.
 - **Patrones:** Usar Functional Components, evitar mutaciones directas de estado.
 - **Decisiones Técnicas Fijas:** Usar Sidecars de Tauri v2 ("Direct Bottle Download"). El motor "mole" se descarga dinámicamente en tiempo de ejecución desde Homebrew (ghcr.io) usando la API de JSON, permitiendo auto-actualizaciones y reducción del tamaño del binario. Security by design.
 

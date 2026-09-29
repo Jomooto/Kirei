@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { Trash2, Eraser, Settings, Zap, AlertTriangle, CheckSquare, Square, XCircle, PieChart, Activity, ChevronUp, ChevronDown, RefreshCw, Loader2, WifiOff } from "lucide-react";
 import { SystemMonitor } from "./SystemMonitor";
+import { Language, getInitialLanguage, translations, optimizeDescriptions } from "./i18n";
 import "./App.css";
 
 const BeachballSpinner = ({ size = 20, className = "" }) => (
@@ -10,6 +11,11 @@ const BeachballSpinner = ({ size = 20, className = "" }) => (
 );
 
 function App() {
+  const [language, setLanguage] = useState<Language>(getInitialLanguage);
+  const languageRef = useRef(language);
+  useEffect(() => { languageRef.current = language; }, [language]);
+  const t = translations[language] || translations.es;
+
   const [activeTab, setActiveTab] = useState("clean");
   const [theme, setTheme] = useState("default");
   const [isTerminalExpanded, setIsTerminalExpanded] = useState(false);
@@ -43,49 +49,58 @@ function App() {
     name: string;
   }
 
-
-
-  
-  // Estados para el Terminal
+  // Execution State
   const [isExecuting, setIsExecuting] = useState(false);
   const [logs, setLogs] = useState<string[]>([]);
-  const [analyzePath, setAnalyzePath] = useState<string>("/Users/josafatmoralestoledo");
-  const logsEndRef = useRef<HTMLDivElement>(null);
-
-  // useRef para evitar actualizar estado si el componente se desmonta o el usuario cambia de pestaña rápido
-  const isMounted = useRef(true);
-
-  const loadingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
-  const isScanningRef = useRef(false);
+  // Space Analyzer State
+  const [analyzePath, setAnalyzePath] = useState<string>("/Users/josafatmoralestoledo");
+  
+  // Terminal auto-scroll ref
+  const logsEndRef = useRef<HTMLDivElement>(null);
+  const isScanningRef = useRef(isScanning);
   const scanLogsRef = useRef<string[]>([]);
+  const loadingTimeoutRef = useRef<any>(null);
   const isCancelledRef = useRef(false);
 
-  const handleDownloadMole = async () => {
+  const handleLanguageChange = (newLang: Language) => {
+    setLanguage(newLang);
+    languageRef.current = newLang;
+    try {
+      localStorage.setItem("kirei_language", newLang);
+    } catch {}
+  };
+
+  const handleDownloadMole = () => {
     setIsDownloadingMole(true);
     setUiError(null);
-    try {
-      await invoke("download_and_install_mole");
-      setTimeout(() => {
+    invoke("download_and_extract_mole")
+      .then(() => {
         setIsMoleInstalled(true);
         setUpdateAvailable(null);
         invoke("get_current_version").then(v => setEngineVersion(v as string)).catch(() => {});
-      }, 600);
-    } catch (e) {
-      setUiError(String(e));
-    } finally {
-      setIsDownloadingMole(false);
-    }
+      })
+      .catch((err) => {
+        console.error("Error al descargar mole:", err);
+        setUiError(typeof err === "string" ? err : "Error al descargar el motor mole. Comprueba tu conexión a Internet.");
+        setIsMoleInstalled(false);
+      })
+      .finally(() => {
+        setIsDownloadingMole(false);
+      });
   };
 
-  // Auto-scroll del terminal
   useEffect(() => {
-    if (logsEndRef.current && isTerminalExpanded) {
+    isScanningRef.current = isScanning;
+  }, [isScanning]);
+
+  useEffect(() => {
+    if (logsEndRef.current) {
       logsEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
-  }, [logs, isTerminalExpanded]);
+  }, [logs]);
 
-  // Escuchar eventos del backend
+  // Listeners de Tauri para logs en tiempo real
   useEffect(() => {
     console.log("Registrando listeners de Tauri...");
     
@@ -137,6 +152,7 @@ function App() {
         // Finalizó el escaneo, procesamos logs
         const allLines = scanLogsRef.current;
         let pathLines: string[] = [];
+        const currentLang = languageRef.current;
         
         if (activeTabRef.current === "uninstall" || activeTabRef.current === "purge") {
           pathLines = allLines
@@ -144,37 +160,23 @@ function App() {
             .filter(l => l.startsWith('○') || l.startsWith('➤ ○'))
             .map(l => {
               let clean = l.replace(/^➤?\s*○\s*/, '').trim();
-              // Parsear y formatear la fecha y el peso
-              clean = clean.replace(/\s+((?:[0-9.]+[a-zA-Z]+)|--)\s*\|\s*(.*)$/i, ' — $1 (Último uso: $2)');
-              // Traducir los sufijos de tiempo al español
-              clean = clean.replace(/(\d+)\s*y ago/i, 'hace $1 años');
-              clean = clean.replace(/(\d+)\s*m ago/i, 'hace $1 meses');
-              clean = clean.replace(/(\d+)\s*d ago/i, 'hace $1 días');
+              if (currentLang === "es") {
+                clean = clean.replace(/\s+((?:[0-9.]+[a-zA-Z]+)|--)\s*\|\s*(.*)$/i, ' — $1 (Último uso: $2)');
+                clean = clean.replace(/(\d+)\s*y ago/i, 'hace $1 años');
+                clean = clean.replace(/(\d+)\s*m ago/i, 'hace $1 meses');
+                clean = clean.replace(/(\d+)\s*d ago/i, 'hace $1 días');
+              } else {
+                clean = clean.replace(/\s+((?:[0-9.]+[a-zA-Z]+)|--)\s*\|\s*(.*)$/i, ' — $1 (Last used: $2)');
+              }
               return clean;
             });
         } else if (activeTabRef.current === "optimize") {
-          const optimizeMap: Record<string, string> = {
-            "DNS & Spotlight Check": "Limpiar la caché de DNS (arregla problemas de navegación si algunas páginas no cargan).",
-            "Finder Cache Refresh": "Reconstruir los íconos y QuickLook (si alguna vez has visto aplicaciones con íconos rotos o en blanco).",
-            "Memory Optimization": "Liberar RAM inactiva (Memory Optimization).",
-            "Permission Repair": "Reparar permisos (arregla errores de 'No tienes permiso para abrir esto').",
-            "Bluetooth Refresh": "Reiniciar el módulo de Bluetooth (por si tus audífonos o ratón se desconectan a cada rato).",
-            "LaunchServices Repair": "Reparar LaunchServices (arregla el menú de 'Abrir con...' cuando haces clic derecho en un archivo).",
-            "App State Cleanup": "Limpiar estados de aplicaciones guardados en caché.",
-            "Broken Config Repair": "Reparar archivos de preferencias y configuraciones rotas.",
-            "Network Cache Refresh": "Refrescar caché de red y DNS (mejora la velocidad de internet).",
-            "Database Optimization": "Optimizar bases de datos del sistema (Mensajes, Mail, etc).",
-            "Font Cache Rebuild": "Reconstruir la caché de fuentes (arregla textos borrosos).",
-            "Dock Refresh": "Refrescar y reiniciar el Dock de macOS.",
-            "Network Stack Refresh": "Refrescar la tabla de enrutamiento y ARP de red.",
-            "Spotlight Optimization": "Optimizar la indexación de búsqueda de Spotlight."
-          };
-          
+          const map = optimizeDescriptions[currentLang] || optimizeDescriptions.es;
           pathLines = allLines
             .map(l => l.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '').trim())
             .filter(l => l.startsWith('➤'))
             .map(l => l.replace(/^➤\s*/, '').trim())
-            .map(l => optimizeMap[l] || l);
+            .map(l => map[l] || l);
         } else if (activeTabRef.current === "analyze") {
           try {
             const fullText = allLines.map(l => l.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '')).join("");
@@ -197,24 +199,18 @@ function App() {
               
               if (data.path && data.path !== "/Users/josafatmoralestoledo" && data.path !== "/") {
                 const parentPath = data.path.substring(0, data.path.lastIndexOf('/')) || "/";
-                pathLines.unshift(`__ANALYZE__|true|${parentPath}|.. (Volver arriba)|`);
+                pathLines.unshift(`__ANALYZE__|true|${parentPath}|.. (${translations[currentLang].goUp})|`);
               }
             }
           } catch(e) {
             console.error("Error parseando analyze:", e);
-            pathLines = ["Error al procesar el análisis de disco."];
+            pathLines = [translations[currentLang].errorProcessingDiskScan];
           }
         } else if (activeTabRef.current === "uninstall") {
           pathLines = allLines
             .map(l => l.replace(/\x1b\[[0-9;]*m/g, '').trim())
             .filter(l => !l.startsWith('NAME') && !l.startsWith('---') && !l.includes('application(s)') && l.length > 10)
             .filter(l => !l.includes('Scanning applications'))
-            .map(l => {
-              // Extract UNINSTALL NAME (3rd column)
-              // CotEditor      com.coteditor.CotEditor      CotEditor      128.7MB
-              // we can just keep the whole line for display, but we need the uninstall name for execution
-              return l;
-            })
             .filter(l => l.length > 0);
         } else {
           pathLines = allLines
@@ -238,7 +234,7 @@ function App() {
       } else {
         // Finalizó ejecución destructiva
         setIsExecuting(false);
-        setScanResult(["El proceso finalizó. Realiza un nuevo escaneo para comprobar el estado actual."]);
+        setScanResult([translations[languageRef.current].processFinished]);
         setSelectedItems(new Set());
       }
     });
@@ -253,25 +249,25 @@ function App() {
 
   const getModuleName = (tab: string) => {
     switch (tab) {
-      case "clean": return "Limpieza Rápida";
-      case "uninstall": return "Desinstalador";
-      case "purge": return "Purga de Desarrollo";
-      case "optimize": return "Optimización";
-      case "analyze": return "Lupa de Espacio";
-      case "status": return "Monitor de Sistema";
+      case "clean": return t.tabClean;
+      case "uninstall": return t.tabUninstall;
+      case "purge": return t.tabPurge;
+      case "optimize": return t.tabOptimize;
+      case "analyze": return t.tabAnalyze;
+      case "status": return t.tabStatus;
       default: return "";
     }
   };
 
   const getModuleDescription = (tab: string) => {
     switch (tab) {
-      case "clean": return "Analiza y limpia archivos temporales, cachés del sistema y registros innecesarios para liberar espacio rápidamente.";
-      case "uninstall": return "Busca aplicaciones instaladas y sus restos ocultos en el sistema para una desinstalación limpia y completa.";
-      case "purge": return "Elimina dependencias huérfanas, cachés de desarrollo (npm, gradle) y herramientas obsoletas para liberar espacio.";
-      case "optimize": return "Repara permisos, reconstruye índices y purga memorias caché profundas para mejorar la velocidad de tu Mac.";
-      case "analyze": return "Explora tu disco duro para encontrar archivos y carpetas muy pesadas que están consumiendo tu almacenamiento.";
-      case "status": return "Monitorea el uso de CPU, Memoria RAM y red en tiempo real para diagnosticar cuellos de botella.";
-      default: return "Analiza el sistema para descubrir qué archivos pueden eliminarse de forma segura usando este módulo.";
+      case "clean": return t.descClean;
+      case "uninstall": return t.descUninstall;
+      case "purge": return t.descPurge;
+      case "optimize": return t.descOptimize;
+      case "analyze": return t.descAnalyze;
+      case "status": return t.descStatus;
+      default: return t.descDefault;
     }
   };
 
@@ -283,13 +279,13 @@ function App() {
         const result = res as UpdateCheckResult;
         if (result.update_available) {
           setUpdateAvailable(result.latest_version);
-          setUpdateFeedbackMsg(`v${result.latest_version} disponible`);
+          setUpdateFeedbackMsg(`v${result.latest_version} ${t.updateAvailableShort}`);
         } else {
-          setUpdateFeedbackMsg(`Motor al día (v${result.latest_version})`);
+          setUpdateFeedbackMsg(`${t.engineUpToDate} (v${result.latest_version})`);
         }
       })
       .catch((err) => {
-        setUpdateFeedbackMsg("Error al verificar");
+        setUpdateFeedbackMsg(t.errorCheckingUpdates);
         setUiError("Error comprobando actualizaciones: " + err);
       })
       .finally(() => {
@@ -311,164 +307,165 @@ function App() {
     setSelectedItems(new Set());
     setLogs([]);
     scanLogsRef.current = [];
-    setIsTerminalExpanded(false); // Oculto por defecto en escaneo
+    setIsTerminalExpanded(false);
     
     if (loadingTimeoutRef.current) clearTimeout(loadingTimeoutRef.current);
     
     await new Promise(resolve => setTimeout(resolve, 0));
     
     try {
-      let targets = ["--dry-run"];
-      if (activeTab === "analyze") {
-        targets = ["-json", targetPath];
+      if (activeTab === "clean") {
+        invoke("run_mole_command", { 
+          command: "clean", 
+          args: ["--dry-run"] 
+        }).catch(err => setUiError("Error al analizar: " + err));
+      } else if (activeTab === "optimize") {
+        invoke("run_mole_command", { 
+          command: "optimize", 
+          args: ["--dry-run"] 
+        }).catch(err => setUiError("Error al optimizar: " + err));
+      } else if (activeTab === "analyze") {
+        invoke("run_mole_command", {
+          command: "analyze",
+          args: [targetPath, "--json"]
+        }).catch(err => setUiError("Error al analizar espacio: " + err));
       } else if (activeTab === "uninstall") {
-        targets = ["--list"];
+        invoke("run_mole_command", { 
+          command: "uninstall", 
+          args: ["--dry-run"] 
+        }).catch(err => setUiError("Error al buscar apps: " + err));
+      } else if (activeTab === "purge") {
+        invoke("run_mole_command", { 
+          command: "purge", 
+          args: ["--dry-run"] 
+        }).catch(err => setUiError("Error al purgar: " + err));
       }
-      await invoke("ejecutar_con_logs", { module: activeTab, targets });
     } catch (e) {
-      console.error(e);
-      setScanResult([`Error durante el escaneo: ${e}`]);
+      console.error("Error al disparar escaneo:", e);
       setIsScanning(false);
       isScanningRef.current = false;
     }
   };
 
   const toggleSelection = (index: number) => {
-    const newSelection = new Set(selectedItems);
-    if (newSelection.has(index)) {
-      newSelection.delete(index);
-    } else {
-      newSelection.add(index);
-    }
-    setSelectedItems(newSelection);
+    setSelectedItems(prev => {
+      const next = new Set(prev);
+      if (next.has(index)) {
+        next.delete(index);
+      } else {
+        next.add(index);
+      }
+      return next;
+    });
   };
 
   const selectAll = () => {
-    // Calcular items seleccionables
-    let selectableCount = 0;
-    const allSelectable = new Set<number>();
-    
-    scanResult.forEach((line, idx) => {
-      if (activeTab === "analyze" && line.startsWith("__ANALYZE__|")) {
-        const parts = line.split("|");
-        const isNavBtn = parts[3].includes("Volver arriba");
-        const isLibrary = parts[2].includes("/Library");
-        if (!isNavBtn && !isLibrary) {
-          selectableCount++;
-          allSelectable.add(idx);
-        }
-      } else {
-        selectableCount++;
-        allSelectable.add(idx);
-      }
-    });
-
     if (selectedItems.size > 0) {
       setSelectedItems(new Set());
     } else {
-      setSelectedItems(allSelectable);
+      setSelectedItems(new Set(scanResult.map((_, i) => i)));
     }
   };
 
-  const detenerProceso = async () => {
-    try {
-      isCancelledRef.current = true;
-      await invoke("detener_proceso");
-      setLogs(prev => [...prev, "[SISTEMA] Solicitud de cancelación enviada..."]);
-    } catch (e) {
-      console.error("Error al detener el proceso", e);
-    }
-  };
-
-  const handleCancelScan = async () => {
-    try {
-      isCancelledRef.current = true;
-      await invoke("detener_proceso"); 
-      setIsScanning(false);
-      isScanningRef.current = false;
-      setScanResult([]);
-      setLogs(prev => [...prev, "--- PROCESO CANCELADO POR EL USUARIO ---"]);
-    } catch (error) {
-      console.error("Error al cancelar:", error);
-    }
+  const handleCancelScan = () => {
+    isCancelledRef.current = true;
+    setIsScanning(false);
+    isScanningRef.current = false;
+    setIsExecuting(false);
+    setScanResult([]);
+    detenerProceso();
   };
 
   const executeCleanup = async () => {
     setShowModal(false);
     setIsExecuting(true);
-    setIsTerminalExpanded(true); // Siempre mostrar terminal en ejecución destructiva
-    setLogs(["[SISTEMA] Iniciando proceso en segundo plano...", "[SISTEMA] Por favor autoriza la ejecución si el sistema lo solicita."]);
-    
+    setLogs([]);
+    setIsTerminalExpanded(false);
+
+    const itemsToProcess = Array.from(selectedItems).map(idx => scanResult[idx]);
+
     try {
-      if (activeTab === "analyze") {
-        const analyzeTargets = scanResult
-          .filter((_, i) => selectedItems.has(i))
-          .map(l => l.split("|")[2]); // Extraer la ruta
-          
-        invoke("eliminar_rutas_manual", { targets: analyzeTargets })
-          .then(() => {
-            if (isMounted.current) {
-              setLogs(prev => [...prev, "[SISTEMA] Archivos eliminados exitosamente.", "--- PROCESO FINALIZADO ---"]);
-              setIsExecuting(false);
-              handleScan(analyzePath);
-            }
-          })
-          .catch(e => {
-            console.error(e);
-            if (isMounted.current) {
-              setLogs(prev => [...prev, `[ERROR] ${e}`]);
-              setIsExecuting(false);
-            }
-          });
-        return;
-      }
+      if (activeTab === "clean") {
+        await invoke("run_mole_command", { 
+          command: "clean", 
+          args: [] 
+        });
+      } else if (activeTab === "optimize") {
+        const reverseMap: Record<string, string> = {
+          "Limpiar la caché de DNS (arregla problemas de navegación si algunas páginas no cargan).": "DNS & Spotlight Check",
+          "Reconstruir los íconos y QuickLook (si alguna vez has visto aplicaciones con íconos rotos o en blanco).": "Finder Cache Refresh",
+          "Liberar RAM inactiva (Memory Optimization).": "Memory Optimization",
+          "Reparar permisos (arregla errores de 'No tienes permiso para abrir esto').": "Permission Repair",
+          "Flush DNS cache (fixes web browsing issues when some websites fail to load).": "DNS & Spotlight Check",
+          "Rebuild icons and QuickLook caches (fixes blank or broken app icons).": "Finder Cache Refresh",
+          "Purge inactive RAM memory (Memory Optimization).": "Memory Optimization",
+          "Repair system permissions (fixes 'Permission denied' opening errors).": "Permission Repair"
+        };
 
-      const isAllSelected = selectedItems.size === scanResult.length && scanResult.length > 0;
-      let executionTargets: string[] = [];
-      if (!isAllSelected && activeTab === "uninstall") {
-        // extract uninstall names for selected apps
-        executionTargets = scanResult
-          .filter((_, i) => selectedItems.has(i))
-          .map(line => {
-             // Basic parsing: split by multiple spaces, usually UNINSTALL NAME is the 3rd token
-             const tokens = line.split(/\s{2,}/);
-             return tokens.length >= 3 ? tokens[2].trim() : "";
-          })
-          .filter(name => name.length > 0);
-      } else if (!isAllSelected) {
-        // for clean/purge we don't have partial selection implemented in rust yet unless we whitelist
-        executionTargets = [];
-      }
+        const originalTasks = itemsToProcess.map(item => reverseMap[item] || item);
+        await invoke("run_mole_command", {
+          command: "optimize",
+          args: originalTasks
+        });
+      } else if (activeTab === "analyze") {
+        const pathsToDelete = itemsToProcess
+          .filter(line => line.startsWith("__ANALYZE__|"))
+          .map(line => line.split("|")[2]);
 
-      invoke("ejecutar_con_logs", { 
-        module: activeTab, 
-        targets: executionTargets 
-      }).catch(e => {
-        console.error(e);
-        if (isMounted.current) {
-          setLogs(prev => [...prev, `[ERROR] ${e}`]);
-          setIsExecuting(false);
-        }
-      });
+        await invoke("run_mole_command", {
+          command: "trash",
+          args: pathsToDelete
+        });
+        
+        handleScan(analyzePath);
+      } else if (activeTab === "uninstall") {
+        const appNames = itemsToProcess.map(line => {
+          const match = line.match(/^([^\s—]+)/);
+          return match ? match[1].trim() : line.trim();
+        });
+
+        await invoke("run_mole_command", {
+          command: "uninstall",
+          args: appNames
+        });
+      } else if (activeTab === "purge") {
+        const purgeItems = itemsToProcess.map(line => {
+          const match = line.match(/^([^\s—]+)/);
+          return match ? match[1].trim() : line.trim();
+        });
+
+        await invoke("run_mole_command", {
+          command: "purge",
+          args: purgeItems
+        });
+      }
     } catch (e) {
-      console.error(e);
-      setScanResult([`Error al iniciar limpieza: ${e}`]);
+      console.error("Error al ejecutar acción destructiva:", e);
+      setLogs(prev => [...prev, `[ERROR] No se pudo completar la acción: ${e}`]);
       setIsExecuting(false);
     }
+  };
+
+  const detenerProceso = () => {
+    invoke("kill_current_process")
+      .then(() => {
+        setIsExecuting(false);
+        setIsScanning(false);
+        isScanningRef.current = false;
+      })
+      .catch((err) => {
+        console.error("Error al detener proceso:", err);
+      });
   };
 
   const getThemeClasses = () => {
     switch(theme) {
       case "light": return "theme-light bg-white backdrop-blur-md text-black";
       case "dark": return "theme-dark bg-neutral-950/90 backdrop-blur-xl text-neutral-100";
-      case "default":
-      default: return "bg-gradient-to-br from-indigo-950 via-purple-950 to-neutral-950/80 backdrop-blur-xl text-white";
+      default: return "theme-default bg-neutral-900/60 backdrop-blur-2xl text-white";
     }
   };
 
-  // Determinar qué icono mostrar.
-  // En el tema 'default' o 'dark' el fondo es oscuro, por lo que usamos el ícono blanco.
-  // Solo en 'light' usamos el ícono negro.
   const iconSrc = theme === "light" ? "/icon_black.svg" : "/icon_white.svg";
 
   return (
@@ -480,7 +477,7 @@ function App() {
           <img src={iconSrc} alt="Kirei Logo" className="h-16 w-auto drop-shadow-lg" />
         </div>
         <div data-tauri-drag-region="true" className="mb-2 text-xs font-semibold text-white/50 uppercase tracking-wider pl-3">
-          Herramientas
+          {t.tools}
         </div>
         
         <button 
@@ -489,7 +486,7 @@ function App() {
           className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${activeTab === "clean" ? "bg-white/20 shadow-sm text-white" : "text-white/70 hover:bg-white/10 hover:text-white"} ${isExecuting ? "opacity-50 cursor-not-allowed" : ""}`}
         >
           <Eraser size={18} />
-          Limpieza Rápida
+          {t.tabClean}
         </button>
 
         <button 
@@ -498,7 +495,7 @@ function App() {
           className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${activeTab === "uninstall" ? "bg-white/20 shadow-sm text-white" : "text-white/70 hover:bg-white/10 hover:text-white"} ${isExecuting ? "opacity-50 cursor-not-allowed" : ""}`}
         >
           <Trash2 size={18} />
-          Desinstalador
+          {t.tabUninstall}
         </button>
 
         <button 
@@ -507,7 +504,7 @@ function App() {
           className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${activeTab === "purge" ? "bg-white/20 shadow-sm text-white" : "text-white/70 hover:bg-white/10 hover:text-white"} ${isExecuting ? "opacity-50 cursor-not-allowed" : ""}`}
         >
           <Zap size={18} />
-          Purga de Desarrollo
+          {t.tabPurge}
         </button>
 
         <button 
@@ -516,7 +513,7 @@ function App() {
           className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${activeTab === "optimize" ? "bg-white/20 shadow-sm text-white" : "text-white/70 hover:bg-white/10 hover:text-white"} ${isExecuting ? "opacity-50 cursor-not-allowed" : ""}`}
         >
           <Settings size={18} />
-          Optimización
+          {t.tabOptimize}
         </button>
 
         <button 
@@ -525,7 +522,7 @@ function App() {
           className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${activeTab === "analyze" ? "bg-white/20 shadow-sm text-white" : "text-white/70 hover:bg-white/10 hover:text-white"} ${isExecuting ? "opacity-50 cursor-not-allowed" : ""}`}
         >
           <PieChart size={18} />
-          Lupa de Espacio
+          {t.tabAnalyze}
         </button>
 
         <button 
@@ -534,18 +531,36 @@ function App() {
           className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${activeTab === "status" ? "bg-white/20 shadow-sm text-white" : "text-white/70 hover:bg-white/10 hover:text-white"} ${isExecuting ? "opacity-50 cursor-not-allowed" : ""}`}
         >
           <Activity size={18} />
-          Monitor de Sistema
+          {t.tabStatus}
         </button>
 
+        {/* Language Selector */}
+        <div className="mt-auto flex flex-col gap-1.5 pt-2">
+          <div className="text-xs font-semibold text-white/50 uppercase tracking-wider pl-3">
+            {t.languageLabel}
+          </div>
+          <div className="relative">
+            <select
+              value={language}
+              onChange={(e) => handleLanguageChange(e.target.value as Language)}
+              className="w-full bg-black/20 hover:bg-black/30 border border-white/10 text-white/90 text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-white/30 cursor-pointer appearance-none pr-8 transition-colors"
+            >
+              <option value="es" className="bg-[#1c1c1e] text-white">Español</option>
+              <option value="en" className="bg-[#1c1c1e] text-white">English (US)</option>
+            </select>
+            <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-white/50 pointer-events-none" />
+          </div>
+        </div>
+
         {/* Theme Settings */}
-        <div className="mt-auto flex flex-col gap-2">
-          <div className="text-xs font-semibold text-white/50 uppercase tracking-wider pl-3 mt-2">
-            TEMA
+        <div className="flex flex-col gap-2 pt-1">
+          <div className="text-xs font-semibold text-white/50 uppercase tracking-wider pl-3 mt-1">
+            {t.themeLabel}
           </div>
           <div className="flex gap-1 justify-center bg-black/20 p-1 rounded-lg">
-            <button onClick={() => setTheme("default")} className={`flex-1 text-xs py-1 rounded-md transition-colors ${theme === "default" ? "bg-white/20 text-white" : "text-white/50 hover:bg-white/10"}`}>Predeterminado</button>
-            <button onClick={() => setTheme("light")} className={`flex-1 text-xs py-1 rounded-md transition-colors ${theme === "light" ? "bg-white/20 text-white" : "text-white/50 hover:bg-white/10"}`}>Claro</button>
-            <button onClick={() => setTheme("dark")} className={`flex-1 text-xs py-1 rounded-md transition-colors ${theme === "dark" ? "bg-white/20 text-white" : "text-white/50 hover:bg-white/10"}`}>Oscuro</button>
+            <button onClick={() => setTheme("default")} className={`flex-1 text-xs py-1 rounded-md transition-colors ${theme === "default" ? "bg-white/20 text-white" : "text-white/50 hover:bg-white/10"}`}>{t.themeDefault}</button>
+            <button onClick={() => setTheme("light")} className={`flex-1 text-xs py-1 rounded-md transition-colors ${theme === "light" ? "bg-white/20 text-white" : "text-white/50 hover:bg-white/10"}`}>{t.themeLight}</button>
+            <button onClick={() => setTheme("dark")} className={`flex-1 text-xs py-1 rounded-md transition-colors ${theme === "dark" ? "bg-white/20 text-white" : "text-white/50 hover:bg-white/10"}`}>{t.themeDark}</button>
           </div>
 
           {/* Botón Buscar Actualizaciones */}
@@ -554,10 +569,10 @@ function App() {
               onClick={handleCheckUpdatesManually}
               disabled={isCheckingUpdate || isExecuting}
               className="mt-1 text-[11px] font-medium text-white/50 hover:text-white/90 flex items-center justify-center gap-1.5 py-1 px-2 rounded-md hover:bg-white/5 transition-all cursor-pointer disabled:opacity-50"
-              title="Buscar nuevas versiones del motor mole"
+              title={t.checkUpdatesTooltip}
             >
               <RefreshCw size={11} className={isCheckingUpdate ? "animate-spin text-amber-400" : ""} />
-              <span>{updateFeedbackMsg || `Motor v${engineVersion || "..."}`}</span>
+              <span>{updateFeedbackMsg || `${t.enginePrefix}${engineVersion || "..."}`}</span>
             </button>
           )}
         </div>
@@ -586,10 +601,10 @@ function App() {
                     <Loader2 className="animate-spin text-white/80" size={26} />
                   </div>
                   <h2 className="text-lg font-semibold tracking-tight text-white mb-1.5">
-                    Configurando Kirei
+                    {t.setupTitle}
                   </h2>
                   <p className="text-xs text-white/50 max-w-xs mb-5 leading-relaxed">
-                    Inicializando el motor de optimización. Esto solo tomará unos segundos...
+                    {t.setupSubtitle}
                   </p>
                   
                   {/* Barra de progreso sutil estilo macOS */}
@@ -603,10 +618,10 @@ function App() {
                     <WifiOff size={26} />
                   </div>
                   <h2 className="text-lg font-semibold tracking-tight text-white mb-1.5">
-                    Conexión requerida
+                    {t.connectionRequired}
                   </h2>
                   <p className="text-xs text-white/50 max-w-xs mb-6 leading-relaxed">
-                    No se pudo descargar automáticamente el motor de optimización. Comprueba tu conexión a Internet y pulsa reintentar.
+                    {t.connectionRequiredSubtitle}
                   </p>
                   
                   <button
@@ -614,13 +629,13 @@ function App() {
                     className="px-5 py-2 rounded-xl text-xs font-semibold bg-white/10 hover:bg-white/20 active:bg-white/30 text-white border border-white/15 transition-all shadow-sm flex items-center gap-2 cursor-pointer"
                   >
                     <RefreshCw size={13} />
-                    <span>Reintentar descarga</span>
+                    <span>{t.retryDownload}</span>
                   </button>
                 </>
               )}
             </div>
           ) : activeTab === "status" ? (
-            <SystemMonitor />
+            <SystemMonitor language={language} />
           ) : scanResult.length === 0 && !isExecuting ? (
             <div className="flex flex-col items-center justify-center w-full max-w-2xl mx-auto mt-8">
               <p className="text-white/60 mb-8 max-w-md">{getModuleDescription(activeTab)}</p>
@@ -637,7 +652,7 @@ function App() {
                         : 'bg-blue-600 hover:bg-blue-700 text-white'
                   }`}
                 >
-                  Analizar Sistema
+                  {t.btnScanSystem}
                 </button>
               ) : (
                 <div className="flex flex-col items-center gap-4">
@@ -646,7 +661,7 @@ function App() {
                     className="px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-full font-medium transition-colors flex items-center gap-2 shadow-lg"
                   >
                     <BeachballSpinner size={16} /> 
-                    Cancelar Análisis
+                    {t.btnCancelScan}
                   </button>
                 </div>
               )}
@@ -656,7 +671,7 @@ function App() {
                 <button 
                   onClick={() => setIsTerminalExpanded(true)}
                   className="absolute bottom-6 right-6 z-50 bg-black/40 hover:bg-black/60 text-white/80 p-2 rounded-full backdrop-blur-md transition-all shadow-lg border border-white/10 active:scale-95"
-                  title="Mostrar Terminal de Registro"
+                  title={t.showTerminalTooltip}
                 >
                   <ChevronUp size={20} />
                 </button>
@@ -666,17 +681,17 @@ function App() {
               {isTerminalExpanded && ((isScanning) || (!isScanning && logs.length > 0)) && (
                 <div className="w-full mt-8 bg-black/90 border border-gray-700 rounded-lg overflow-hidden shadow-2xl relative">
                   <div className="bg-gray-800 px-4 py-2 text-xs text-gray-400 border-b border-gray-700 flex justify-between items-center">
-                    <span>Terminal de Registro</span>
+                    <span>{t.terminalTitle}</span>
                     <div className="flex items-center gap-4">
                       <button 
                         onClick={() => navigator.clipboard.writeText(logs.join('\n'))}
                         className="hover:text-white transition-colors flex items-center gap-1 active:scale-95"
-                        title="Copiar logs"
+                        title={t.copyLogs}
                       >
                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
-                        Copiar
+                        {t.copyLogs}
                       </button>
-                      <span>{isScanning ? 'Ejecutando...' : 'Detenido'}</span>
+                      <span>{isScanning ? t.runningStatus : t.stoppedStatus}</span>
                       <button onClick={() => setIsTerminalExpanded(false)} className="hover:text-white transition-colors ml-2">
                         <ChevronDown size={16} />
                       </button>
@@ -686,7 +701,7 @@ function App() {
                   {/* Contenedor de Logs con Scroll */}
                   <div className="h-48 p-4 overflow-y-auto font-mono text-sm text-green-400 select-text">
                     {logs.length === 0 ? (
-                      <div className="text-gray-500 italic">Esperando salida del sistema...</div>
+                      <div className="text-gray-500 italic">{t.waitingSystemOutput}</div>
                     ) : (
                       logs.map((log, index) => (
                         <div key={index} className="break-all whitespace-pre-wrap mb-1 text-left">
@@ -703,14 +718,14 @@ function App() {
             <div className="w-full flex flex-col flex-1 min-h-0 pt-4">
               <div className="flex justify-between items-center mb-4 flex-shrink-0">
                 <span className="text-sm font-medium text-white/70">
-                  {scanResult.length === 1 ? '1 ruta encontrada' : `${scanResult.length} rutas encontradas`}
+                  {scanResult.length === 1 ? t.pathsFoundSingular : `${scanResult.length} ${t.pathsFoundPlural}`}
                 </span>
                 {!isExecuting && scanResult.length > 1 && !(activeTab === "analyze" && analyzePath.includes("/Library")) && (
                   <button 
                     onClick={selectAll}
                     className="text-xs bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-md transition-colors font-medium"
                   >
-                    {selectedItems.size > 0 ? "Deseleccionar Todo" : "Seleccionar Todo"}
+                    {selectedItems.size > 0 ? t.btnDeselectAll : t.btnSelectAll}
                   </button>
                 )}
               </div>
@@ -736,7 +751,7 @@ function App() {
                         const path = parts[2];
                         const name = parts[3];
                         const size = parts[4];
-                        const isNavBtn = name.includes("Volver arriba");
+                        const isNavBtn = name.includes(t.goUp) || name.includes("Volver arriba");
                         const isLibrary = path.includes("/Library");
                         
                         return (
@@ -750,12 +765,12 @@ function App() {
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   if (isLibrary) {
-                                    alert("Archivos de Library bloqueados por seguridad.\nPor favor, usa el módulo 'Desinstalador' o 'Limpieza Rápida' para purgar estos elementos de manera segura.");
+                                    alert(t.libraryAlert);
                                     return;
                                   }
                                   toggleSelection(idx);
                                 }}
-                                title={isLibrary ? "Protegido por el sistema" : "Seleccionar para borrar"}
+                                title={isLibrary ? t.protectedBySystem : t.selectToDelete}
                               >
                                 {isLibrary ? <AlertTriangle size={18} /> : selectedItems.has(idx) ? <CheckSquare size={18} /> : <Square size={18} className="text-white/30" />}
                               </div>
@@ -815,7 +830,7 @@ function App() {
                       disabled={activeTab === "analyze" && analyzePath === "/Users/josafatmoralestoledo"}
                       className="bg-white/10 hover:bg-white/20 active:bg-white/30 text-white font-medium py-3 px-8 rounded-full transition-colors shadow-lg disabled:opacity-50 disabled:pointer-events-none"
                     >
-                      Inicio
+                      {t.btnHome}
                     </button>
                     <button 
                       onClick={() => setShowModal(true)}
@@ -823,7 +838,7 @@ function App() {
                       className="bg-red-500 hover:bg-red-600 active:bg-red-700 text-white font-medium py-3 px-8 rounded-full shadow-lg transition-transform hover:scale-105 active:scale-95 disabled:opacity-50 disabled:pointer-events-none flex items-center gap-2"
                     >
                       <Trash2 size={18} />
-                      {activeTab === "analyze" ? "Mover a Papelera" : "Eliminar"} ({selectedItems.size})
+                      {activeTab === "analyze" ? t.btnTrash : t.btnDelete} ({selectedItems.size})
                     </button>
                   </>
                 ) : (
@@ -832,7 +847,7 @@ function App() {
                     className="bg-red-600 hover:bg-red-500 text-white font-medium py-3 px-8 rounded-full shadow-[0_0_15px_rgba(220,38,38,0.5)] transition-all flex items-center gap-2 animate-pulse hover:animate-none"
                   >
                     <XCircle size={18} />
-                    Detener / Cancelar
+                    {t.btnStopCancel}
                   </button>
                 )}
               </div>
@@ -849,25 +864,25 @@ function App() {
               <AlertTriangle size={24} />
             </div>
             <h3 className="text-xl font-bold text-center mb-2">
-              {activeTab === "analyze" ? "¿Mover a la papelera?" : "¿Estás completamente seguro?"}
+              {activeTab === "analyze" ? t.modalAnalyzeTitle : t.modalGeneralTitle}
             </h3>
             <p className="text-white/70 text-center text-sm mb-6">
               {activeTab === "analyze" 
-                ? "Los elementos seleccionados serán enviados a tu papelera, por lo que podrás recuperarlos si cambias de opinión."
-                : "Estás a punto de solicitar privilegios para ejecutar una acción destructiva sobre los elementos seleccionados. Esta acción no se puede deshacer."}
+                ? t.modalAnalyzeDesc
+                : t.modalGeneralDesc}
             </p>
             <div className="flex flex-col gap-2">
               <button 
                 onClick={executeCleanup}
                 className="w-full bg-red-500 hover:bg-red-600 text-white font-medium py-2.5 rounded-lg transition-colors flex justify-center items-center gap-2"
               >
-                {activeTab === "analyze" ? "Sí, mover a la papelera" : "Sí, limpiar el sistema"}
+                {activeTab === "analyze" ? t.modalBtnAnalyze : t.modalBtnGeneral}
               </button>
               <button 
                 onClick={() => setShowModal(false)}
                 className="w-full bg-white/10 hover:bg-white/15 text-white font-medium py-2.5 rounded-lg transition-colors"
               >
-                Cancelar
+                {t.modalBtnCancel}
               </button>
             </div>
           </div>
@@ -882,8 +897,8 @@ function App() {
               <AlertTriangle size={18} strokeWidth={2.8} />
             </div>
             <div className="text-left">
-              <p className="text-xs font-black text-black tracking-tight">Nueva versión del motor ({updateAvailable})</p>
-              <p className="text-[11px] font-bold text-black/80">¿Deseas actualizar el motor de limpieza?</p>
+              <p className="text-xs font-black text-black tracking-tight">{t.newEngineVersion} ({updateAvailable})</p>
+              <p className="text-[11px] font-bold text-black/80">{t.updateEnginePrompt}</p>
             </div>
           </div>
           <div className="flex gap-2">
@@ -891,13 +906,13 @@ function App() {
               onClick={handleDownloadMole}
               className="text-xs bg-black hover:bg-neutral-900 text-[#f59e0b] px-3 py-1.5 rounded-lg font-black uppercase tracking-wider transition-colors cursor-pointer"
             >
-              Actualizar
+              {t.btnUpdate}
             </button>
             <button 
               onClick={() => setUpdateAvailable(null)}
               className="text-xs bg-black/10 hover:bg-black/20 text-black px-2.5 py-1.5 rounded-lg font-bold transition-colors cursor-pointer"
             >
-              Cerrar
+              {t.btnClose}
             </button>
           </div>
         </div>
