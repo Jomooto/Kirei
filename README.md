@@ -10,6 +10,10 @@
 
 If you are looking for a **free CleanMyMac alternative**, a **macOS cleaner**, or an **open-source Mac optimizer**, Kirei offers a sleek *Glassmorphism* interface without telemetry, hidden fees, or bloatware.
 
+<p align="center">
+  <img src="assets/preview.png" alt="Kirei Interface Preview" width="750" style="border-radius: 12px;" />
+</p>
+
 ---
 
 ## ✨ Key Features
@@ -37,7 +41,7 @@ If you are looking for a **free CleanMyMac alternative**, a **macOS cleaner**, o
 
 ### Method 1: .DMG File (Recommended)
 
-1. Head over to the [Releases](../../releases) section of this repository.
+1. Head over to the [Releases](https://github.com/Jomooto/Kirei/releases) section of this repository.
 2. Download the latest installer version `Kirei_x.x.x_aarch64.dmg`.
 3. Open the downloaded file and drag **Kirei** into your **Applications** folder.
 
@@ -57,8 +61,8 @@ If you are looking for a **free CleanMyMac alternative**, a **macOS cleaner**, o
 ### Clone the Repository
 
 ```bash
-git clone https://github.com/YOUR_USER/kirei.git
-cd kirei
+git clone https://github.com/Jomooto/Kirei.git
+cd Kirei
 ```
 
 ### Install Dependencies

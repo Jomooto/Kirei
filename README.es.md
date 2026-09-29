@@ -10,6 +10,10 @@
 
 Si buscas una **alternativa gratuita a CleanMyMac**, Kirei te ofrece una interfaz elegante con efecto de cristal translúcido (*glassmorphism*) sin telemetría, sin cobros ocultos y sin software innecesario (*bloatware*).
 
+<p align="center">
+  <img src="assets/preview.png" alt="Vista Previa de Kirei" width="750" style="border-radius: 12px;" />
+</p>
+
 ---
 
 ## ✨ Características Principales
@@ -37,7 +41,7 @@ Si buscas una **alternativa gratuita a CleanMyMac**, Kirei te ofrece una interfa
 
 ### Método 1: Archivo .DMG (Recomendado)
 
-1. Dirígete a la sección de [Releases](../../releases) de este repositorio.
+1. Dirígete a la sección de [Releases](https://github.com/Jomooto/Kirei/releases) de este repositorio.
 2. Descarga la versión más reciente del instalador `Kirei_x.x.x_aarch64.dmg`.
 3. Abre el archivo descargado y arrastra **Kirei** a tu carpeta de **Aplicaciones**.
 
@@ -57,8 +61,8 @@ Si buscas una **alternativa gratuita a CleanMyMac**, Kirei te ofrece una interfa
 ### Clonar el Repositorio
 
 ```bash
-git clone https://github.com/TU_USUARIO/kirei.git
-cd kirei
+git clone https://github.com/Jomooto/Kirei.git
+cd Kirei
 ```
 
 ### Instalar Dependencias
