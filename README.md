@@ -4,7 +4,7 @@
 [![React](https://img.shields.io/badge/React-19-61dafb?logo=react)](https://react.dev/)
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
-*[🇪🇸 Leer en Español (Read in Spanish)](README.es.md)*
+*[Leer en Español (Read in Spanish)](README.es.md)*
 
 **Kirei** is a modern, fast, and elegant **macOS cleaner and system optimizer**. It serves as a beautiful, native-feeling GUI wrapper for the popular open-source CLI [tw93/mole](https://github.com/tw93/mole).
 

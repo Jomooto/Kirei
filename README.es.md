@@ -1,24 +1,27 @@
-# Kirei — The Ultimate Open-Source Mac Cleaner
+# Kirei — El Optimizador Open-Source Definitivo para Mac
 
 [![Tauri](https://img.shields.io/badge/Tauri-v2-blue?logo=tauri)](https://v2.tauri.app/)
 [![React](https://img.shields.io/badge/React-19-61dafb?logo=react)](https://react.dev/)
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
-**Kirei** is a modern, fast, and elegant **macOS cleaner and system optimizer**. It serves as a beautiful, native-feeling GUI wrapper for the popular open-source CLI [tw93/mole](https://github.com/tw93/mole). 
+*[Read in English](README.md)*
 
-If you are looking for a **free CleanMyMac alternative**, a **macOS cleaner**, or an **open-source Mac optimizer**, Kirei offers a sleek *Glassmorphism* interface without telemetry, hidden fees, or bloatware.
+**Kirei** es un **limpiador y optimizador de sistema para macOS** moderno, rápido y elegante. Funciona como una interfaz gráfica hermosa y nativa para la popular herramienta de línea de comandos de código abierto [tw93/mole](https://github.com/tw93/mole).
+
+Si buscas una **alternativa gratuita a CleanMyMac**, Kirei te ofrece una interfaz elegante estilo *Glassmorphism* sin telemetría, sin cobros ocultos y sin bloatware.
 
 ---
 
-## ✨ Features (Características Principales)
+## ✨ Características Principales
 
-- 🧹 **Deep System Cleaner:** Remove obsolete caches, temporary files, user logs, and unnecessary downloads with a single click (Free Mac Cleaner).
-- 🔍 **Space Analyzer (Lupa de Espacio):** Visually inspect and locate large files and folders consuming your disk storage.
-- 📊 **Resource Monitor:** Real-time monitoring of CPU, RAM, and network usage to diagnose bottlenecks.
-- 🗑️ **Smart App Uninstaller:** Completely uninstall applications, wiping leftover files in `~/Library` and associated hidden folders.
-- 🔒 **Native Security (Touch ID):** Seamless macOS integration via Touch ID or administrator password for tasks requiring elevated privileges (`osascript`).
-- 🎨 **Dynamic Themes:** Full support for Light, Dark, and Default mode with native macOS blur and transparency effects.
-- 🚀 **Lightweight Architecture:** Built on Tauri v2 and Rust; low memory footprint and an ultra-compact binary size (~3 MB).
+- 🧹 **Limpieza Profunda del Sistema:** Elimina cachés obsoletos, archivos temporales, registros de usuario y descargas innecesarias con un solo clic.
+- 🔍 **Lupa de Espacio:** Inspecciona visualmente y localiza archivos o carpetas grandes que están consumiendo el almacenamiento de tu disco.
+- 🗑️ **Desinstalador Inteligente:** Desinstala aplicaciones por completo, eliminando sus archivos residuales ocultos en `~/Library`.
+- ⚡️ **Purga de Desarrollo:** Libera gigabytes rápidamente eliminando de forma segura carpetas `node_modules`, `vendor` y artefactos de compilación en todos tus proyectos.
+- 🔒 **Seguridad Nativa (Touch ID):** Integración perfecta con macOS mediante Touch ID o contraseña de administrador para las tareas que requieren permisos elevados.
+- 🎨 **Temas Dinámicos:** Soporte completo para modo Claro, Oscuro y Predeterminado del sistema con efectos nativos de desenfoque y transparencia de macOS.
+- 🚀 **Arquitectura Ligera:** Construido sobre Tauri v2 y Rust; bajo consumo de memoria y un tamaño de binario ultra compacto (~3 MB).
+- 🌐 **Interfaz Bilingüe:** Cambio de idioma en tiempo real entre inglés y español.
 
 ---
 
@@ -86,7 +89,7 @@ npm run tauri build
 ```
 
 El instalador final se generará en:
-`src-tauri/target/release/bundle/dmg/Kirei_0.1.0_aarch64.dmg`
+`src-tauri/target/release/bundle/dmg/Kirei_x.x.x_aarch64.dmg`
 
 ---
 
@@ -94,12 +97,11 @@ El instalador final se generará en:
 
 - **Transparencia Total:** Las acciones ejecutadas son inspeccionables desde la terminal integrada en la aplicación.
 - **Sin Telemetría Oculta:** La aplicación no envía datos privados ni telemetría a servidores externos.
-- **Acceso por Demanda:** Solo solicita permisos elevados mediante diálogos nativos del sistema cuando una tarea específica de limpieza de sistema lo requiere.
+- **Acceso por Demanda:** Solo solicita permisos elevados mediante diálogos nativos del sistema cuando una tarea específica de limpieza lo requiere.
+- **Descarga Directa del Motor:** Kirei descarga el núcleo directamente desde el registro seguro de contenedores de GitHub (ghcr.io) usando la infraestructura de Homebrew.
 
 ---
 
-## 📄 Licencia
+## 📜 Licencia
 
-Este proyecto está bajo la licencia GNU General Public License v3.0 (GPL-3.0). Consulta el archivo `LICENSE` para más detalles.
-
-Agradecimientos especiales al proyecto [mole](https://github.com/tw93/mole) por su excelente motor de limpieza en macOS.
+Este proyecto está licenciado bajo la **GPL-3.0 License**. Consulta el archivo `LICENSE` para más detalles.
