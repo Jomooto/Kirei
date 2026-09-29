@@ -23,6 +23,7 @@ export const translations = {
     tabOptimize: "Optimización",
     tabAnalyze: "Lupa de Espacio",
     tabStatus: "Monitor de Sistema",
+    tabSettings: "Configuración",
 
     // Language & Theme
     languageLabel: "Idioma",
@@ -57,6 +58,7 @@ export const translations = {
     descOptimize: "Repara permisos, reconstruye índices y purga memorias caché profundas para mejorar la velocidad de tu Mac.",
     descAnalyze: "Explora tu disco duro para encontrar archivos y carpetas muy pesadas que están consumiendo tu almacenamiento.",
     descStatus: "Monitorea el uso de CPU, Memoria RAM y red en tiempo real para diagnosticar cuellos de botella.",
+    descSettings: "Configura el idioma de la aplicación, el tema visual y supervisa las actualizaciones del motor de limpieza.",
     descDefault: "Analiza el sistema para descubrir qué archivos pueden eliminarse de forma segura usando este módulo.",
 
     // Action buttons
@@ -68,6 +70,21 @@ export const translations = {
     btnTrash: "Mover a Papelera",
     btnDelete: "Eliminar",
     btnStopCancel: "Detener / Cancelar",
+
+    // Settings Module
+    settingsTitle: "Configuración General",
+    settingsLangTitle: "Idioma de la Interfaz",
+    settingsLangDesc: "Selecciona el idioma de Kirei o déjalo sincronizado con el sistema.",
+    settingsThemeTitle: "Apariencia y Estilo",
+    settingsThemeDesc: "Personaliza el tema visual y los efectos de transparencia en macOS.",
+    settingsEngineTitle: "Motor de Limpieza (Mole)",
+    settingsEngineDesc: "Mole es el motor de código abierto que impulsa las tareas de análisis y optimización.",
+    settingsCurrentVersion: "Versión instalada:",
+    settingsNotInstalled: "No instalado",
+    settingsBtnCheckUpdates: "Buscar Actualizaciones",
+    settingsBtnReinstall: "Reinstalar Motor",
+    settingsEngineStatus: "Estado del motor:",
+    settingsEngineStatusOk: "Operativo y listo",
 
     // Scan feedback & Terminal
     pathsFoundSingular: "1 ruta encontrada",
@@ -119,6 +136,7 @@ export const translations = {
     tabOptimize: "Optimization",
     tabAnalyze: "Space Lens",
     tabStatus: "System Monitor",
+    tabSettings: "Settings",
 
     // Language & Theme
     languageLabel: "Language",
@@ -153,6 +171,7 @@ export const translations = {
     descOptimize: "Repair permissions, rebuild indexes, and flush deep caches to boost your Mac's performance.",
     descAnalyze: "Explore your disk to find large files and heavy folders consuming your storage.",
     descStatus: "Monitor CPU, RAM, and network usage in real time to diagnose system bottlenecks.",
+    descSettings: "Configure application language, visual appearance, and manage cleaning engine updates.",
     descDefault: "Scan the system to discover which files can be safely removed using this module.",
 
     // Action buttons
@@ -164,6 +183,21 @@ export const translations = {
     btnTrash: "Move to Trash",
     btnDelete: "Delete",
     btnStopCancel: "Stop / Cancel",
+
+    // Settings Module
+    settingsTitle: "General Settings",
+    settingsLangTitle: "Interface Language",
+    settingsLangDesc: "Select the primary language or keep it in sync with macOS.",
+    settingsThemeTitle: "Appearance & Style",
+    settingsThemeDesc: "Customize visual theme and translucency effects on macOS.",
+    settingsEngineTitle: "Cleaning Engine (Mole)",
+    settingsEngineDesc: "Mole is the open-source engine powering system diagnostics and cleanup tasks.",
+    settingsCurrentVersion: "Installed version:",
+    settingsNotInstalled: "Not installed",
+    settingsBtnCheckUpdates: "Check for Updates",
+    settingsBtnReinstall: "Reinstall Engine",
+    settingsEngineStatus: "Engine status:",
+    settingsEngineStatusOk: "Operational and ready",
 
     // Scan feedback & Terminal
     pathsFoundSingular: "1 path found",

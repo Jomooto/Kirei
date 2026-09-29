@@ -3,7 +3,7 @@ use tauri::State;
 use tauri::Emitter;
 use std::sync::{Arc, Mutex};
 use std::process::{Command, Child};
-use std::io::{BufReader, BufRead};
+use std::io::BufReader;
 use std::fs;
 use serde_json::Value;
 use std::time::Duration;
@@ -35,7 +35,7 @@ fn get_executable_sidecar_path(app: &tauri::AppHandle) -> Result<std::path::Path
 }
 
 #[tauri::command]
-fn detener_proceso(state: State<'_, ProcessState>) -> Result<(), String> {
+fn kill_current_process(state: State<'_, ProcessState>) -> Result<(), String> {
     let mut process_state = state.0.lock().map_err(|_| "Fallo al adquirir el candado del proceso.")?;
     if let Some(mut child) = process_state.take() {
         let _ = child.kill();
@@ -79,18 +79,18 @@ async fn run_mole_scan(app: tauri::AppHandle, module: String) -> Result<String, 
 }
 
 #[tauri::command]
-async fn ejecutar_con_logs(
+async fn run_mole_command(
     app: tauri::AppHandle,
     state: State<'_, ProcessState>,
-    module: String,
-    targets: Vec<String>
+    command: String,
+    args: Vec<String>
 ) -> Result<(), String> {
-    let allowed_modules = ["clean", "uninstall", "purge", "optimize", "analyze"];
-    if !allowed_modules.contains(&module.as_str()) {
+    let allowed_modules = ["clean", "uninstall", "purge", "optimize", "analyze", "trash"];
+    if !allowed_modules.contains(&command.as_str()) {
         return Err("Módulo no permitido por razones de seguridad.".into());
     }
 
-    for target_path in &targets {
+    for target_path in &args {
         if target_path.contains("..") {
             return Err("Posible Path Traversal detectado. Abortando.".into());
         }
@@ -99,8 +99,8 @@ async fn ejecutar_con_logs(
     let sidecar_path = get_executable_sidecar_path(&app)?;
     let path_str = sidecar_path.to_string_lossy();
 
-    let mut safe_args = vec![escape_arg(&module)];
-    for t in targets {
+    let mut safe_args = vec![escape_arg(&command)];
+    for t in args {
         safe_args.push(escape_arg(&t));
     }
     let args_joined = safe_args.join(" ");
@@ -109,20 +109,31 @@ async fn ejecutar_con_logs(
     let _ = std::fs::remove_file(log_file);
     let _ = std::fs::File::create(log_file);
 
-    let command_to_show = format!("$ sudo mole {}", args_joined);
-    let _ = app.emit("log-terminal", command_to_show);
-    let _ = app.emit("log-terminal", String::from("... Esperando permisos de administrador (Touch ID o Contraseña) ..."));
-
-    let shell_cmd = if module == "uninstall" || module == "purge" {
-        format!("cd / && script -q /dev/null {} {} > {} 2>&1", escape_arg(&path_str), args_joined, log_file)
+    let command_to_show = if command == "purge" {
+        format!("$ mole {}", args_joined)
     } else {
-        format!("cd / && {} {} > {} 2>&1", escape_arg(&path_str), args_joined, log_file)
+        format!("$ sudo mole {}", args_joined)
+    };
+    let _ = app.emit("log-terminal", command_to_show);
+    if command != "purge" {
+        let _ = app.emit("log-terminal", String::from("... Esperando permisos de administrador (Touch ID o Contraseña) ..."));
+    }
+
+    let shell_cmd = if command == "uninstall" || command == "purge" {
+        format!("cd / && echo q | {} {} > {} 2>&1", escape_arg(&path_str), args_joined, log_file)
+    } else {
+        format!("cd / && {} {} < /dev/null > {} 2>&1", escape_arg(&path_str), args_joined, log_file)
     };
 
-    let script = format!("do shell script \"{}\" with administrator privileges", escape_applescript(&shell_cmd));
+    let script = if command == "purge" {
+        format!("do shell script \"{}\"", escape_applescript(&shell_cmd))
+    } else {
+        format!("do shell script \"{}\" with administrator privileges", escape_applescript(&shell_cmd))
+    };
 
     let mut cmd = Command::new("osascript");
-    cmd.arg("-e").arg(&script);
+    cmd.current_dir("/")
+       .arg("-e").arg(&script);
 
     let child = cmd.spawn().map_err(|e| format!("Error iniciando proceso: {}", e))?;
 
@@ -139,53 +150,114 @@ async fn ejecutar_con_logs(
             std::thread::sleep(std::time::Duration::from_millis(100));
             file = std::fs::File::open(log_file);
         }
-        
+        use std::io::Read;
         let mut reader = BufReader::new(file.unwrap_or_else(|_| std::fs::File::open("/dev/null").unwrap()));
-        let mut buffer = String::new();
+        let mut buffer = Vec::new();
+        let mut byte = [0u8; 1];
+        let mut process_finished = false;
+        let mut error_emitted = false;
         
         loop {
-            let mut is_alive = true;
-            if let Ok(mut guard) = process_arc.lock() {
-                if let Some(child) = guard.as_mut() {
-                    match child.try_wait() {
-                        Ok(Some(status)) => {
-                            is_alive = false;
-                            if !status.success() {
-                                let _ = app_poll.emit("log-terminal", "[SISTEMA] Operación cancelada o fallida.");
+            if !process_finished {
+                if let Ok(mut guard) = process_arc.lock() {
+                    if let Some(child) = guard.as_mut() {
+                        match child.try_wait() {
+                            Ok(Some(status)) => {
+                                process_finished = true;
+                                if !status.success() && !error_emitted {
+                                    let _ = app_poll.emit("log-terminal", "[SISTEMA] Operación cancelada o fallida.");
+                                    error_emitted = true;
+                                }
                             }
+                            Ok(None) => {}
+                            Err(_) => { process_finished = true; }
                         }
-                        Ok(None) => {}
-                        Err(_) => { is_alive = false; }
+                    } else {
+                        process_finished = true;
                     }
-                } else {
-                    is_alive = false;
                 }
             }
 
-            buffer.clear();
-            match reader.read_line(&mut buffer) {
+            match reader.read(&mut byte) {
                 Ok(n) if n > 0 => {
-                    let mut clean_line = buffer.trim_end().to_string();
-                    clean_line = clean_line.replace("\r", "");
-                    if !clean_line.is_empty() {
-                        let _ = app_poll.emit("log-terminal", clean_line);
+                    let b = byte[0];
+                    if b == b'\n' || b == b'\r' {
+                        if !buffer.is_empty() {
+                            let l = String::from_utf8_lossy(&buffer).to_string();
+                            {
+                                let mut stripped = String::new();
+                                let mut in_escape = false;
+                                for c in l.chars() {
+                                    if c == '\x1B' { in_escape = true; }
+                                    else if in_escape { if c.is_ascii_alphabetic() { in_escape = false; } }
+                                    else { stripped.push(c); }
+                                }
+                                let clean = stripped.trim_end().to_string();
+                                if !clean.is_empty() {
+                                    // Emit logs: treat as normal log if App requires it for parse, or if it's \n
+                                    // BUT to fix the CRLF bug, we always emit "log-terminal" so Kirei can parse it.
+                                    // Actually, we should just emit "log-terminal" for EVERYTHING here since App.tsx filters out spinner lines anyway!
+                                    // If we emit "log-terminal-overwrite", App.tsx ignores it for scanResult!
+                                    // The user specifically wants the list in scanResult.
+                                    let _ = app_poll.emit("log-terminal", clean);
+                                }
+                            }
+                            buffer.clear();
+                        }
+                    } else {
+                        buffer.push(b);
                     }
                 }
                 _ => {
-                    if !is_alive {
-                        while let Ok(n) = reader.read_line(&mut buffer) {
+                    if process_finished {
+                        // Leer lo que queda
+                        while let Ok(n) = reader.read(&mut byte) {
                             if n == 0 { break; }
-                            let mut clean_line = buffer.trim_end().to_string();
-                            clean_line = clean_line.replace("\r", "");
-                            if !clean_line.is_empty() {
-                                let _ = app_poll.emit("log-terminal", clean_line);
+                            let b = byte[0];
+                            if b == b'\n' || b == b'\r' {
+                                if !buffer.is_empty() {
+                                    let l = String::from_utf8_lossy(&buffer).to_string();
+                            {
+                                        let mut stripped = String::new();
+                                        let mut in_escape = false;
+                                        for c in l.chars() {
+                                            if c == '\x1B' { in_escape = true; }
+                                            else if in_escape { if c.is_ascii_alphabetic() { in_escape = false; } }
+                                            else { stripped.push(c); }
+                                        }
+                                        let clean = stripped.trim_end().to_string();
+                                        if !clean.is_empty() {
+                                            let _ = app_poll.emit("log-terminal", clean);
+                                        }
+                                    }
+                                    buffer.clear();
+                                }
+                            } else {
+                                buffer.push(b);
                             }
-                            buffer.clear();
+                        }
+                        
+                        // Emitir lo último si quedó algo
+                        if !buffer.is_empty() {
+                            let l = String::from_utf8_lossy(&buffer).to_string();
+                            {
+                                let mut stripped = String::new();
+                                let mut in_escape = false;
+                                for c in l.chars() {
+                                    if c == '\x1B' { in_escape = true; }
+                                    else if in_escape { if c.is_ascii_alphabetic() { in_escape = false; } }
+                                    else { stripped.push(c); }
+                                }
+                                let clean = stripped.trim_end().to_string();
+                                if !clean.is_empty() {
+                                    let _ = app_poll.emit("log-terminal", clean);
+                                }
+                            }
                         }
                         let _ = app_poll.emit("proceso-terminado", "Proceso finalizado.");
                         break;
                     }
-                    std::thread::sleep(std::time::Duration::from_millis(100));
+                    std::thread::sleep(std::time::Duration::from_millis(50));
                 }
             }
         }
@@ -386,6 +458,26 @@ async fn download_and_install_mole(app: tauri::AppHandle) -> Result<(), String> 
     Ok(())
 }
 
+#[tauri::command]
+async fn download_and_open_kirei_update(url: String) -> Result<(), String> {
+    let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
+    let downloads_dir = std::path::PathBuf::from(home).join("Downloads");
+    let _ = fs::create_dir_all(&downloads_dir);
+    
+    let dest_path = downloads_dir.join("Kirei-Update.dmg");
+    
+    let response = reqwest::get(&url).await.map_err(|e| e.to_string())?;
+    let bytes = response.bytes().await.map_err(|e| e.to_string())?;
+    fs::write(&dest_path, bytes).map_err(|e| e.to_string())?;
+    
+    Command::new("open")
+        .arg(&dest_path)
+        .status()
+        .map_err(|e| format!("Error al montar el DMG: {}", e))?;
+        
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -404,14 +496,15 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             run_mole_scan, 
-            ejecutar_con_logs, 
-            detener_proceso,
+            run_mole_command, 
+            kill_current_process,
             eliminar_rutas_manual,
             get_system_status,
             check_for_updates,
             get_active_mole_path_cmd,
             download_and_install_mole,
-            get_current_version
+            get_current_version,
+            download_and_open_kirei_update
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -423,9 +516,8 @@ mod tests {
     use std::io::Read;
 
     #[test]
-    fn test_byte_reader_carriage_return() {
-        // Simulamos el output de mole con múltiples \r
-        let mock_output = b"Start\r\rLoading 10%\rLoading 20%\nDone\n";
+    fn test_byte_reader_carriage_return_with_ansi() {
+        let mock_output = b"\x1B[K\x1B[?25lStart\r\x1B[KLoading 10%\r\x1B[KLoading 20%\nDone\n";
         let mut reader = std::io::BufReader::new(&mock_output[..]);
         
         let mut buffer = Vec::new();
@@ -438,8 +530,19 @@ mod tests {
             
             if b == b'\n' || b == b'\r' {
                 if !buffer.is_empty() {
-                    if let Ok(l) = String::from_utf8(buffer.clone()) {
-                        lines_extracted.push(l);
+                    let l = String::from_utf8_lossy(&buffer).to_string();
+                    {
+                        let mut stripped = String::new();
+                        let mut in_escape = false;
+                        for c in l.chars() {
+                            if c == '\x1B' { in_escape = true; }
+                            else if in_escape { if c.is_ascii_alphabetic() { in_escape = false; } }
+                            else { stripped.push(c); }
+                        }
+                        let clean = stripped.trim_end().to_string();
+                        if !clean.is_empty() {
+                            lines_extracted.push(clean);
+                        }
                     }
                     buffer.clear();
                 }
@@ -454,6 +557,7 @@ mod tests {
         assert_eq!(lines_extracted[2], "Loading 20%");
         assert_eq!(lines_extracted[3], "Done");
     }
+    
     #[test]
     fn test_escape_arg() {
         assert_eq!(escape_arg("normal"), "'normal'");

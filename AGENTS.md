@@ -57,7 +57,23 @@ Recientemente se aplicó un refactor completo para endurecer la aplicación ante
 - Soporte extendido para Windows/Linux (requiere adaptar el sidecar de mole).
 - Implementación de Tests unitarios y E2E.
 
-## 5. Estructura de Directorios Clave
+## 7. Comportamiento de los Módulos del Motor (Mole)
+> **CRÍTICO:** Nunca asumas que todos los módulos de `mole` se comportan igual. Tienen reglas estrictas de entrada, salida y permisos.
+
+- **Módulo `uninstall` (Lupa de Desinstalación):**
+  - **Permisos:** Requiere `sudo` (mediante `osascript ... with administrator privileges`) para eliminar aplicaciones de `/Applications`.
+  - **TUI y Salida:** Posee una interfaz de usuario en terminal interactiva. Para saltarla al hacer dry-run o listados desde Kirei, DEBE inyectarse un comando de salida mediante tubería: `echo q | mole uninstall --dry-run`. NO USAR `expect` con TTYs virtuales porque macOS bloquea a `mdfind` (Spotlight) bajo `osascript` si el contexto no tiene Full Disk Access (FDA), lo que causa un loop infinito.
+  - **Argumentos:** Acepta rutas/nombres específicos como argumentos (`mole uninstall "App1" "App2"`). Kirei puede enviarle los nombres parseados (ej. extrayendo líneas que inician con `○`).
+
+- **Módulo `purge` (Rayo de Desarrollo):**
+  - **Permisos:** **NO requiere `sudo`**. Solo busca en las carpetas personales del usuario (ej. `~/Documents`). Si se ejecuta con `sudo` bajo `osascript`, TCC de macOS bloqueará el acceso a las carpetas (Operation not permitted / status 1). Debe ejecutarse como el usuario local para permitir los pop-ups del sistema pidiendo permiso de lectura si son necesarios.
+  - **TUI y Salida:** **NO tiene menú interactivo**. Al ejecutarlo siempre escanea, reporta (ej. con marcas `✓ [DRY RUN]`), y automáticamente purga si no es dry-run. 
+  - **Argumentos:** **NO acepta argumentos posicionales** (lanzará *Unknown option*). Limpia globalmente todo lo configurado en `--paths`. Desde Kirei, se le pasa un arreglo vacío de argumentos (`args: []`) al momento de limpiar. El parseador lee líneas `✓ [DRY RUN]`.
+
+- **Módulos Genéricos (`clean`, `optimize`, etc.):**
+  - Generalmente operan sin menú interactivo complejo, dependiendo del módulo algunos aceptan argumentos y otros corren en lote. Respetar siempre el parseo limpio desde `stdout` eliminando códigos ANSI.
+
+## 8. Estructura de Directorios Clave
 ```text
 src/
  ├── components/    # Componentes reutilizables de UI

@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { Trash2, Eraser, Settings, Zap, AlertTriangle, CheckSquare, Square, XCircle, PieChart, Activity, ChevronUp, ChevronDown, RefreshCw, Loader2, WifiOff } from "lucide-react";
+import { Trash2, Eraser, Settings, SlidersHorizontal, Zap, AlertTriangle, CheckSquare, Square, XCircle, PieChart, Activity, ChevronUp, ChevronDown, RefreshCw, Loader2, WifiOff, Copy } from "lucide-react";
 import { SystemMonitor } from "./SystemMonitor";
+import { SettingsView } from "./SettingsView";
 import { Language, getInitialLanguage, translations, optimizeDescriptions } from "./i18n";
 import "./App.css";
 
@@ -36,6 +37,9 @@ function App() {
   const [updateFeedbackMsg, setUpdateFeedbackMsg] = useState<string | null>(null);
   const [engineVersion, setEngineVersion] = useState<string | null>(null);
   const [uiError, setUiError] = useState<string | null>(null);
+  
+  // App Update State
+  const [kireiUpdate, setKireiUpdate] = useState<{version: string, url: string} | null>(null);
 
   interface UpdateCheckResult {
     update_available: boolean;
@@ -74,7 +78,7 @@ function App() {
   const handleDownloadMole = () => {
     setIsDownloadingMole(true);
     setUiError(null);
-    invoke("download_and_extract_mole")
+    invoke("download_and_install_mole")
       .then(() => {
         setIsMoleInstalled(true);
         setUpdateAvailable(null);
@@ -125,15 +129,33 @@ function App() {
         handleDownloadMole();
       });
     
+    // Verificación de Kirei en Git
+    fetch("https://api.github.com/repos/Jomooto/Kirei/releases/latest")
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.tag_name && data.tag_name !== "v0.2.0" && data.tag_name !== "0.2.0") {
+          const dmgAsset = data.assets?.find((a: any) => a.name.endsWith(".dmg"));
+          const url = dmgAsset ? dmgAsset.browser_download_url : data.html_url;
+          setKireiUpdate({ version: data.tag_name, url });
+        }
+      })
+      .catch(() => {});
+    
     const unlistenLogs = listen<string>("log-terminal", (event) => {
-      console.log("Evento log-terminal recibido:", event.payload);
-      setLogs(prev => {
-        const newLogs = [...prev, event.payload];
-        return newLogs;
-      });
+      setLogs(prev => [...prev, event.payload]);
       if (isScanningRef.current) {
         scanLogsRef.current.push(event.payload);
       }
+    });
+
+    const unlistenLogsOverwrite = listen<string>("log-terminal-overwrite", (event) => {
+      setLogs(prev => {
+        if (prev.length === 0) return [event.payload];
+        const newLogs = [...prev];
+        newLogs[newLogs.length - 1] = event.payload;
+        return newLogs;
+      });
+      // Do not push to scanLogsRef to avoid parsing spinner text for stats
     });
     
     const unlistenEnd = listen<string>("proceso-terminado", (event) => {
@@ -154,7 +176,7 @@ function App() {
         let pathLines: string[] = [];
         const currentLang = languageRef.current;
         
-        if (activeTabRef.current === "uninstall" || activeTabRef.current === "purge") {
+        if (activeTabRef.current === "uninstall") {
           pathLines = allLines
             .map(l => l.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '').trim())
             .filter(l => l.startsWith('○') || l.startsWith('➤ ○'))
@@ -169,6 +191,14 @@ function App() {
                 clean = clean.replace(/\s+((?:[0-9.]+[a-zA-Z]+)|--)\s*\|\s*(.*)$/i, ' — $1 (Last used: $2)');
               }
               return clean;
+            });
+        } else if (activeTabRef.current === "purge") {
+          pathLines = allLines
+            .map(l => l.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '').trim())
+            .filter(l => l.includes('✓ [DRY RUN]'))
+            .map(l => {
+              const parts = l.split('✓ [DRY RUN]');
+              return parts.length > 1 ? parts[1].trim() : l;
             });
         } else if (activeTabRef.current === "optimize") {
           const map = optimizeDescriptions[currentLang] || optimizeDescriptions.es;
@@ -243,6 +273,7 @@ function App() {
       console.log("Limpiando listeners de Tauri...");
       if (loadingTimeoutRef.current) clearTimeout(loadingTimeoutRef.current);
       unlistenLogs.then(f => f());
+      unlistenLogsOverwrite.then(f => f());
       unlistenEnd.then(f => f());
     };
   }, []);
@@ -255,6 +286,7 @@ function App() {
       case "optimize": return t.tabOptimize;
       case "analyze": return t.tabAnalyze;
       case "status": return t.tabStatus;
+      case "settings": return t.tabSettings;
       default: return "";
     }
   };
@@ -267,6 +299,7 @@ function App() {
       case "optimize": return t.descOptimize;
       case "analyze": return t.descAnalyze;
       case "status": return t.descStatus;
+      case "settings": return t.descSettings;
       default: return t.descDefault;
     }
   };
@@ -327,7 +360,7 @@ function App() {
       } else if (activeTab === "analyze") {
         invoke("run_mole_command", {
           command: "analyze",
-          args: [targetPath, "--json"]
+          args: ["-json", targetPath]
         }).catch(err => setUiError("Error al analizar espacio: " + err));
       } else if (activeTab === "uninstall") {
         invoke("run_mole_command", { 
@@ -429,14 +462,9 @@ function App() {
           args: appNames
         });
       } else if (activeTab === "purge") {
-        const purgeItems = itemsToProcess.map(line => {
-          const match = line.match(/^([^\s—]+)/);
-          return match ? match[1].trim() : line.trim();
-        });
-
         await invoke("run_mole_command", {
           command: "purge",
-          args: purgeItems
+          args: []
         });
       }
     } catch (e) {
@@ -462,7 +490,7 @@ function App() {
     switch(theme) {
       case "light": return "theme-light bg-white backdrop-blur-md text-black";
       case "dark": return "theme-dark bg-neutral-950/90 backdrop-blur-xl text-neutral-100";
-      default: return "theme-default bg-neutral-900/60 backdrop-blur-2xl text-white";
+      default: return "theme-default bg-gradient-to-br from-indigo-950 via-purple-950 to-neutral-950/80 backdrop-blur-xl text-white";
     }
   };
 
@@ -512,7 +540,7 @@ function App() {
           disabled={isExecuting}
           className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${activeTab === "optimize" ? "bg-white/20 shadow-sm text-white" : "text-white/70 hover:bg-white/10 hover:text-white"} ${isExecuting ? "opacity-50 cursor-not-allowed" : ""}`}
         >
-          <Settings size={18} />
+          <SlidersHorizontal size={18} />
           {t.tabOptimize}
         </button>
 
@@ -534,47 +562,16 @@ function App() {
           {t.tabStatus}
         </button>
 
-        {/* Language Selector */}
-        <div className="mt-auto flex flex-col gap-1.5 pt-2">
-          <div className="text-xs font-semibold text-white/50 uppercase tracking-wider pl-3">
-            {t.languageLabel}
-          </div>
-          <div className="relative">
-            <select
-              value={language}
-              onChange={(e) => handleLanguageChange(e.target.value as Language)}
-              className="w-full bg-black/20 hover:bg-black/30 border border-white/10 text-white/90 text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-white/30 cursor-pointer appearance-none pr-8 transition-colors"
-            >
-              <option value="es" className="bg-[#1c1c1e] text-white">Español</option>
-              <option value="en" className="bg-[#1c1c1e] text-white">English (US)</option>
-            </select>
-            <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-white/50 pointer-events-none" />
-          </div>
-        </div>
-
-        {/* Theme Settings */}
-        <div className="flex flex-col gap-2 pt-1">
-          <div className="text-xs font-semibold text-white/50 uppercase tracking-wider pl-3 mt-1">
-            {t.themeLabel}
-          </div>
-          <div className="flex gap-1 justify-center bg-black/20 p-1 rounded-lg">
-            <button onClick={() => setTheme("default")} className={`flex-1 text-xs py-1 rounded-md transition-colors ${theme === "default" ? "bg-white/20 text-white" : "text-white/50 hover:bg-white/10"}`}>{t.themeDefault}</button>
-            <button onClick={() => setTheme("light")} className={`flex-1 text-xs py-1 rounded-md transition-colors ${theme === "light" ? "bg-white/20 text-white" : "text-white/50 hover:bg-white/10"}`}>{t.themeLight}</button>
-            <button onClick={() => setTheme("dark")} className={`flex-1 text-xs py-1 rounded-md transition-colors ${theme === "dark" ? "bg-white/20 text-white" : "text-white/50 hover:bg-white/10"}`}>{t.themeDark}</button>
-          </div>
-
-          {/* Botón Buscar Actualizaciones */}
-          {isMoleInstalled && (
-            <button
-              onClick={handleCheckUpdatesManually}
-              disabled={isCheckingUpdate || isExecuting}
-              className="mt-1 text-[11px] font-medium text-white/50 hover:text-white/90 flex items-center justify-center gap-1.5 py-1 px-2 rounded-md hover:bg-white/5 transition-all cursor-pointer disabled:opacity-50"
-              title={t.checkUpdatesTooltip}
-            >
-              <RefreshCw size={11} className={isCheckingUpdate ? "animate-spin text-amber-400" : ""} />
-              <span>{updateFeedbackMsg || `${t.enginePrefix}${engineVersion || "..."}`}</span>
-            </button>
-          )}
+        {/* Settings Tab at the bottom of the Sidebar */}
+        <div className="mt-auto border-t border-white/10 pt-2">
+          <button 
+            onClick={() => { if(!isExecuting) { setActiveTab("settings"); setScanResult([]); } }}
+            disabled={isExecuting}
+            className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${activeTab === "settings" ? "bg-white/20 shadow-sm text-white" : "text-white/70 hover:bg-white/10 hover:text-white"} ${isExecuting ? "opacity-50 cursor-not-allowed" : ""}`}
+          >
+            <Settings size={18} />
+            {t.tabSettings}
+          </button>
         </div>
       </div>
 
@@ -593,7 +590,21 @@ function App() {
             </div>
           )}
 
-          {isMoleInstalled === false || isMoleInstalled === null ? (
+          {activeTab === "settings" ? (
+            <SettingsView
+              language={language}
+              onLanguageChange={handleLanguageChange}
+              theme={theme}
+              onThemeChange={setTheme}
+              engineVersion={engineVersion}
+              isCheckingUpdate={isCheckingUpdate}
+              updateFeedbackMsg={updateFeedbackMsg}
+              onCheckUpdates={handleCheckUpdatesManually}
+              isDownloadingMole={isDownloadingMole}
+              onDownloadMole={handleDownloadMole}
+              kireiUpdate={kireiUpdate}
+            />
+          ) : isMoleInstalled === false || isMoleInstalled === null ? (
             <div className="flex flex-col items-center justify-center w-full max-w-sm mx-auto my-auto text-center animate-in fade-in duration-300">
               {isDownloadingMole || isMoleInstalled === null ? (
                 <>
@@ -688,7 +699,7 @@ function App() {
                         className="hover:text-white transition-colors flex items-center gap-1 active:scale-95"
                         title={t.copyLogs}
                       >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+                        <Copy size={14} />
                         {t.copyLogs}
                       </button>
                       <span>{isScanning ? t.runningStatus : t.stoppedStatus}</span>
