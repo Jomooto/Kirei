@@ -11,7 +11,7 @@
 Si buscas una **alternativa gratuita a CleanMyMac**, Kirei te ofrece una interfaz elegante con efecto de cristal translúcido (*glassmorphism*) sin telemetría, sin cobros ocultos y sin software innecesario (*bloatware*).
 
 <p align="center">
-  <img src="assets/preview.png" alt="Vista Previa de Kirei" width="750" style="border-radius: 12px;" />
+  <img src="assets/preview_es.png" alt="Vista Previa de Kirei" width="750" style="border-radius: 12px;" />
 </p>
 
 ---

@@ -11,7 +11,7 @@
 If you are looking for a **free CleanMyMac alternative**, a **macOS cleaner**, or an **open-source Mac optimizer**, Kirei offers a sleek *Glassmorphism* interface without telemetry, hidden fees, or bloatware.
 
 <p align="center">
-  <img src="assets/preview.png" alt="Kirei Interface Preview" width="750" style="border-radius: 12px;" />
+  <img src="assets/preview_en.png" alt="Kirei Interface Preview" width="750" style="border-radius: 12px;" />
 </p>
 
 ---
