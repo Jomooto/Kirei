@@ -1,14 +1,14 @@
-# Kirei — El Optimizador Open-Source Definitivo para Mac
+# Kirei — El Optimizador de Código Abierto Definitivo para Mac
 
 [![Tauri](https://img.shields.io/badge/Tauri-v2-blue?logo=tauri)](https://v2.tauri.app/)
 [![React](https://img.shields.io/badge/React-19-61dafb?logo=react)](https://react.dev/)
-[![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+[![Licencia: GPL-3.0](https://img.shields.io/badge/Licencia-GPL--3.0-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
-*[Read in English](README.md)*
+*[Leer en inglés (English version)](README.md)*
 
 **Kirei** es un **limpiador y optimizador de sistema para macOS** moderno, rápido y elegante. Funciona como una interfaz gráfica hermosa y nativa para la popular herramienta de línea de comandos de código abierto [tw93/mole](https://github.com/tw93/mole).
 
-Si buscas una **alternativa gratuita a CleanMyMac**, Kirei te ofrece una interfaz elegante estilo *Glassmorphism* sin telemetría, sin cobros ocultos y sin bloatware.
+Si buscas una **alternativa gratuita a CleanMyMac**, Kirei te ofrece una interfaz elegante con efecto de cristal translúcido (*glassmorphism*) sin telemetría, sin cobros ocultos y sin software innecesario (*bloatware*).
 
 ---
 
@@ -25,10 +25,10 @@ Si buscas una **alternativa gratuita a CleanMyMac**, Kirei te ofrece una interfa
 
 ---
 
-## 🛠️ Stack Tecnológico
+## 🛠️ Pila Tecnológica
 
 - **Frontend:** React 19, TypeScript, Tailwind CSS v4, Lucide React
-- **Backend / Wrapper:** Tauri v2 (Rust)
+- **Backend / Envoltorio:** Tauri v2 (Rust)
 - **Motor de Limpieza:** [mole](https://github.com/tw93/mole) (con descarga dinámica y parcheo en tiempo de ejecución)
 
 ---
@@ -104,4 +104,4 @@ El instalador final se generará en:
 
 ## 📜 Licencia
 
-Este proyecto está licenciado bajo la **GPL-3.0 License**. Consulta el archivo `LICENSE` para más detalles.
+Este proyecto está bajo la **Licencia GPL-3.0**. Consulta el archivo `LICENSE` para más detalles.
